@@ -1157,7 +1157,8 @@ def discretize_stationary_cg(analytical_problem, diameter=None, domain_discretiz
     # nonlinear reaction part
     if p.nonlinear_reaction is not None:
         Li += [NonlinearReactionOperator(grid, boundary_info, reaction_coefficient = p.nonlinear_reaction_coefficient,
-                                        reaction_function = p.nonlinear_reaction, reaction_function_derivative = p.nonlinear_reaction_derivative)]
+                                         reaction_function = p.nonlinear_reaction, reaction_function_derivative = p.nonlinear_reaction_derivative, 
+                                         name = 'nonlinear_reaction')]
         coefficients += [1.]
 
     # robin boundaries
