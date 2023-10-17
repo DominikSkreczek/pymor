@@ -17,9 +17,10 @@ from pymor.analyticalproblems.instationary import InstationaryProblem
 from pymor.discretizers.builtin.domaindiscretizers.default import discretize_domain_default
 from pymor.discretizers.builtin.grids.boundaryinfos import EmptyBoundaryInfo
 from pymor.discretizers.builtin.grids.referenceelements import line, square, triangle
+from pymor.discretizers.builtin.grids.subgrid import SubGrid, make_sub_grid_boundary_info
 from pymor.discretizers.builtin.gui.visualizers import OnedVisualizer, PatchVisualizer
 from pymor.models.basic import InstationaryModel, StationaryModel
-from pymor.operators.constructions import LincombOperator, QuadraticFunctional
+from pymor.operators.constructions import ComponentProjectionOperator, LincombOperator, QuadraticFunctional
 from pymor.operators.interface import Operator
 from pymor.operators.numpy import NumpyMatrixBasedOperator, NumpyMatrixOperator
 from pymor.vectorarrays.numpy import NumpyVectorSpace
@@ -1018,6 +1019,18 @@ class NonlinearReactionOperator(Operator):
         A = csc_matrix(A).copy()
 
         return NumpyMatrixOperator(A, source_id = self.source.id, range_id = self.range.id)
+    
+    def restricted(self, dofs):
+        source_faces = np.setdiff1d(self.grid.neighbours(2, 0)[dofs].ravel(),
+                                   np.array([-1], dtype=np.int32),
+                                   assume_unique=True)
+        sub_grid = SubGrid(self.grid, source_faces)
+        sub_boundary_info = make_sub_grid_boundary_info(sub_grid, self.grid, self.boundary_info)
+        op = self.with_(grid=sub_grid, boundary_info=sub_boundary_info, space_id=None,
+                        name=f'{self.name}_restricted')
+        sub_grid_indices = sub_grid.indices_from_parent_indices(dofs, codim=2)
+        proj = ComponentProjectionOperator(sub_grid_indices, op.range)
+        return proj @ op, sub_grid.parent_indices(2)
 
 
 def discretize_stationary_cg(analytical_problem, diameter=None, domain_discretizer=None,

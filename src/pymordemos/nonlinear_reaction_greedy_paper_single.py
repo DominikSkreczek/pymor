@@ -26,8 +26,8 @@ print('Anzahl Element', grid.size(0))
 print('Anzahl DoFs', grid.size(2))
 fom, data = discretizer(problem, diameter = diameter)
 
-cache_id = (f'pymordemos.nonlinear_reaction {ei_snapshots} {test_snapshots}')
-fom.enable_caching('persistent',cache_id)
+# cache_id = (f'pymordemos.nonlinear_reaction {ei_snapshots} {test_snapshots}')
+fom.enable_caching('memory')
 
 parameter_space = fom.parameters.space((0.01, 10))
 
