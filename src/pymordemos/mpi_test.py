@@ -5,12 +5,7 @@ from pymor.algorithms.greedy import rb_greedy
 from pymor.parallel.default import new_parallel_pool, dummy_pool
 from pymor.parallel.manager import RemoteObjectManager
 import numpy as np
-from mpi4py import MPI 
 
-#mpi_comm = MPI.COMM_WORLD
-#mpi_rank = mpi_comm.Get_rank()
-
-# if mpi_rank==0:
 
 set_log_levels({'pymor': 'INFO'})
 
@@ -20,10 +15,10 @@ parameters = Parameters({'reaction': 2})
 diffusion = ConstantFunction(1,2)
 
 diameter = 1/36  # comparable to original paper 
-ei_snapshots = 6  # same as paper (creates 12x12 grid)
-ei_size = 20  # maximum number of bases in EIM
+ei_snapshots = 6  
+ei_size = 20  # number of bases in EIM
 rb_size = 45  # maximum number of bases in RBM
-test_snapshots = 8 # same as paper (creates 15x15 grid)
+test_snapshots = 8 
 
 
 pool = new_parallel_pool(allow_mpi=True)
@@ -42,7 +37,6 @@ print('Anzahl Element', grid.size(0))
 print('Anzahl DoFs', grid.size(2))
 fom, data = discretizer(problem, diameter = diameter)
 
-# cache_id = (f'pymordemos.nonlinear_reaction {ei_snapshots} {test_snapshots}')
 fom.enable_caching('memory')
 
 parameter_space = fom.parameters.space((0.01, 10))
@@ -59,7 +53,6 @@ def _test_set_norm(mu, fom=fom):
 
 parameter_sample = parameter_space.sample_uniformly(ei_snapshots)
 nonlin_op = fom.operator.operators[2]
-#evaluations = pool.map(_eval_nonlin_op, parameter_sample, fom=fom)
 
 with RemoteObjectManager() as reobma:
     if pool is not dummy_pool:
@@ -98,44 +91,6 @@ greedy_data = rb_greedy(fom, reductor, parameter_sample,
 
 rom = greedy_data['rom']
 
-# print('Testing ROM...')
-
-# max_err = -1
-# for mu in test_sample:
-#     u_fom = fom.solve(mu)
-#     u_rom = rom.solve(mu)
-#     this_diff = u_fom - reductor.reconstruct(u_rom)
-#     this_err = this_diff.norm(fom.h1_0_semi_product)[0]
-#     if this_err > max_err: max_err = this_err
-
-# rel_error = max_err.item()/u_max_norm
 print(f'RB size N: {len(reductor.bases["RB"])}')
-# print(f'max. rel. error: {rel_error:2.5e}')
 
-# test_sample = parameter_space.sample_uniformly(test_snapshots)
-# abs_errs = []
-# rel_errs = []
-# max_abs_err = -1
-# max_rel_err = -1
-# max_abs_diff = None
-# max_rel_diff = None
-# for mu in test_sample:
-#     u_fom = fom.solve(mu)
-#     u_rom = rom.solve(mu)
-#     this_diff = u_fom - reductor.reconstruct(u_rom)
-#     this_abs_err = this_diff.norm(fom.h1_0_semi_product)[0]
-#     this_rel_err = this_diff.norm(fom.h1_0_semi_product)[0]/u_fom.norm(fom.h1_0_semi_product)[0]
-#     abs_errs.append(this_abs_err)
-#     rel_errs.append(this_rel_err)
-#     if this_abs_err > max_abs_err:
-#         max_abs_err = this_abs_err
-#         max_abs_diff = this_diff
-#     if this_rel_err > max_rel_err:
-#         max_rel_err = this_rel_err
-#         max_rel_diff = this_diff
-
-# print(f'max. abs. err.: {max_abs_err:2.5e}')
-# print(f'max. rel. err.: {max_rel_err:2.5e}')
-
-# fom.visualize((max_abs_diff, max_rel_diff), legend = ('Maximum Absolute Test Error', 'Maximum Relative Test Error'), separate_colorbars=True)
 del pool
