@@ -7,18 +7,18 @@ from pymor.parallel.manager import RemoteObjectManager
 import numpy as np
 
 
-set_log_levels({'pymor': 'INFO'})
+#set_log_levels({'pymor': 'INFO'})
 
 domain = RectDomain(([0,0], [1,1]))
 l = ExpressionFunction('100 * sin(2 * pi * x[0]) * sin(2 * pi * x[1])', dim_domain = 2)
 parameters = Parameters({'reaction': 2})
 diffusion = ConstantFunction(1,2)
 
-diameter = 1/36  # comparable to original paper 
-ei_snapshots = 6  
-ei_size = 20  # number of bases in EIM
-rb_size = 45  # maximum number of bases in RBM
-test_snapshots = 8 
+diameter = 1/10  # comparable to original paper 
+num_snapshots = 10
+ei_size = 10
+rb_size = 10  # maximum number of bases in RBM
+
 
 
 pool = new_parallel_pool(allow_mpi=True)
@@ -42,55 +42,70 @@ fom.enable_caching('memory')
 parameter_space = fom.parameters.space((0.01, 10))
 
 # Training set
-def _interpolate_operator_build_evaluations(mu, fom=None, operator=None, evaluations=None):
+# def _interpolate_operator_build_evaluations(mu, fom=None, operator=None, evaluations=None):
+#     U = fom.solve(mu)
+#     evaluations.append(operator.apply(U, mu=mu))
+
+# def _test_set_norm(mu, fom=fom):
+#     U = fom.solve(mu)
+#     return U.norm(fom.h1_0_semi_product)
+
+
+parameter_sample = parameter_space.sample_uniformly(num_snapshots)
+
+# with RemoteObjectManager() as reobma:
+#     if pool is not dummy_pool:
+#         evaluations = reobma.manage(pool.push(nonlin_op.range.empty()))
+#         pool.map(_interpolate_operator_build_evaluations, parameter_sample,
+#                     fom=fom, operator=nonlin_op, evaluations=evaluations)
+#     else:
+#         evaluations = nonlin_op.range.empty()
+#         for mu in parameter_sample:
+#             U = fom.solve(mu)
+#             evaluations.append(nonlin_op.apply(U, mu=mu))
+
+#     # Test set
+#     test_sample = parameter_space.sample_uniformly(test_snapshots)
+#     test_norms = list(zip(*pool.map(_test_set_norm, test_sample, fom=fom)))
+#     u_max_norm = np.max(test_norms)
+#     u_max_norm = u_max_norm.item()
+evaluations = fom.operator.operators[2].range.empty()
+for mu in parameter_sample:
     U = fom.solve(mu)
-    evaluations.append(operator.apply(U, mu=mu))
-
-def _test_set_norm(mu, fom=fom):
-    U = fom.solve(mu)
-    return U.norm(fom.h1_0_semi_product)
-
-
-parameter_sample = parameter_space.sample_uniformly(ei_snapshots)
-nonlin_op = fom.operator.operators[2]
-
-with RemoteObjectManager() as reobma:
-    if pool is not dummy_pool:
-        evaluations = reobma.manage(pool.push(nonlin_op.range.empty()))
-        pool.map(_interpolate_operator_build_evaluations, parameter_sample,
-                    fom=fom, operator=nonlin_op, evaluations=evaluations)
-    else:
-        evaluations = nonlin_op.range.empty()
-        for mu in parameter_sample:
-            U = fom.solve(mu)
-            evaluations.append(nonlin_op.apply(U, mu=mu))
-
-    # Test set
-    test_sample = parameter_space.sample_uniformly(test_snapshots)
-    test_norms = list(zip(*pool.map(_test_set_norm, test_sample, fom=fom)))
-    u_max_norm = np.max(test_norms)
-    u_max_norm = u_max_norm.item()
-
-    dofs, basis, data = ei_greedy(evaluations, copy=False,
+    evaluations.append(fom.operator.operators[2].apply(U, mu=mu))
+dofs, basis, data = ei_greedy(evaluations, copy=False,
                                 error_norm=fom.l2_norm,
                                 max_interpolation_dofs=ei_size,
                                 pool=pool)
-ei_op = EmpiricalInterpolatedOperator(nonlin_op, dofs, basis, triangular=True)  #False for DEIM
+ei_op = EmpiricalInterpolatedOperator(fom.operator.operators[2], dofs, basis, triangular=True)  #False for DEIM
 new_ops = [ei_op if i == 2 else op for i, op in enumerate(fom.operator.operators)]
 fom_ei = fom.with_(operator=fom.operator.with_(operators=new_ops))
 
 print('RB generation ...')
 
 reductor = StationaryRBReductor(fom_ei)
+# reductor = StationaryRBReductor(fom)
 
 greedy_data = rb_greedy(fom, reductor, parameter_sample,
                             use_error_estimator=False,
                             error_norm=fom.h1_0_semi_norm,
                             max_extensions=rb_size,
-                            pool=pool)
+                            pool=None)
 
 rom = greedy_data['rom']
 
-print(f'RB size N: {len(reductor.bases["RB"])}')
+print(f'Finished biulding ROM.')
+
+def _solve_ROM(mu, rom=None,evaluations=None):
+    U = rom.solve(mu)
+    evaluations.append(U)
+
+test_sample = parameter_space.sample_randomly(10)
+rom_sols = rom.solution_space.empty()
+pool.map(_solve_ROM, test_sample,
+            rom=rom, evaluations=rom_sols)
+max_norm = np.max(rom.h1_semi_norm(rom_sols))
+    
+print(f'Max norm: {max_norm}')
 
 del pool
